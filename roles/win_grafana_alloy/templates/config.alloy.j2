@@ -1,0 +1,80 @@
+logging {
+  level = "info"
+  format = "logfmt"
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prom.ycdisp.net:9090/api/v1/write"
+  }
+}
+
+prometheus.exporter.windows "default" {
+  enabled_collectors = {{ collectors }}
+}
+
+prometheus.scrape "default" {
+  targets = prometheus.exporter.windows.default.targets
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+loki.source.windowsevent "application" {
+  eventlog_name = "Application"
+  use_incoming_timestamp = true
+  forward_to = [loki.process.endpoint.receiver]
+}
+
+loki.source.windowsevent "system"  {
+    eventlog_name = "System"
+    use_incoming_timestamp = true
+    forward_to = [loki.process.endpoint.receiver]
+}
+
+loki.process "endpoint" {
+  forward_to = [loki.write.endpoint.receiver]
+  stage.json {
+      expressions = {
+          message = "",
+          Overwritten = "",
+          source = "",
+          computer = "",
+          eventRecordID = "",
+          channel = "",
+          component_id = "",
+          execution_processId = "",
+          execution_processName = "",
+      }
+  }
+
+  stage.structured_metadata {
+      values = {
+          "eventRecordID" = "",
+          "channel" = "",
+          "component_id" = "",
+          "execution_processId" = "",
+          "execution_processName" = "",
+      }
+  }
+
+  stage.eventlogmessage {
+      source = "message"
+      overwrite_existing = true
+  }
+
+  stage.labels {
+      values = {
+          "service_name" = "source",
+      }
+  }
+
+  stage.output {
+    source = "message"
+  }
+
+}
+
+loki.write "endpoint" {
+    endpoint {
+        url ="http://loki.ycdisp.net:3100/loki/api/v1/push"
+    }
+}

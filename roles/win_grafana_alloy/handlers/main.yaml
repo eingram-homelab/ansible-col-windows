@@ -1,7 +1,7 @@
 ---
-- name: Restart grafana agent
+- name: Restart Grafana Alloy service
   ansible.windows.win_service:
-    name: Grafana Agent
+    name: Alloy
     state: restarted
 
 - name: Reboot

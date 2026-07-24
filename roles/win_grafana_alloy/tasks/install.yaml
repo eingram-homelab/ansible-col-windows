@@ -1,0 +1,79 @@
+---
+- name: Open firewall port
+  community.windows.win_firewall_rule:
+    name: Grafana Alloy Agent
+    localport: 12345
+    action: allow
+    direction: in
+    protocol: tcp
+    state: present
+    enabled: true
+
+- name: Define service to collector mappings
+  ansible.builtin.set_fact:
+    collector_service_pairs:
+      - service: DNS
+        collectors:
+          - dns
+      - service: NTDS
+        collectors:
+          - ad
+      - service: DHCPServer
+        collectors:
+          - dhcp
+      - service: DFSR
+        collectors:
+          - dfsr
+      - service: MSSQLSERVER
+        collectors:
+          - mssql
+      - service: W3SVC
+        collectors:
+          - iis
+      - service: ClusSvc
+        collectors:
+          - mscluster
+
+- name: Check services used for collector selection
+  ansible.windows.win_service_info:
+    name: "{{ item.service }}"
+  loop: "{{ collector_service_pairs }}"
+  register: collector_service_checks
+
+- name: Initialize collectors with common list
+  ansible.builtin.set_fact:
+    collectors: "{{ common_collectors }}"
+
+- name: Append collectors for running services
+  ansible.builtin.set_fact:
+    collectors: "{{ collectors + item.item.collectors }}"
+  loop: "{{ collector_service_checks.results }}"
+  when:
+    - item.services | default([]) | length > 0
+    - item.services[0].state == 'running'
+
+- name: Remove duplicate collectors
+  ansible.builtin.set_fact:
+    collectors: "{{ collectors | unique }}"
+
+- name: Download Grafana Alloy agent installer to host
+  ansible.windows.win_get_url:
+    url: https://github.com/grafana/alloy/releases/download/{{ ver }}/alloy-installer-windows-amd64.exe
+    dest: c:\temp\alloy-installer-windows-amd64.exe
+
+- name: Run installer
+  ansible.windows.win_shell: |
+    c:\temp\alloy-installer-windows-amd64.exe /S /CONFIG="\{{ install_dir }}\config.alloy" /D={{ install_dir }}
+
+- name: Create agent config on host
+  ansible.windows.win_template:
+    src: config.alloy.j2
+    dest: "{{ install_dir }}\\config.alloy"
+
+- name: Modify registry to change http_server_address
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\GrafanaLabs\Alloy
+    name: Arguments
+    data: ['run', '{{ install_dir }}\config.alloy', '--storage.path={{ install_dir }}\data', '--server.http.address=0.0.0.0:12345']
+    type: multistring
+  notify: Restart Grafana Alloy service

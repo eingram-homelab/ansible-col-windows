@@ -1,19 +1,19 @@
 ---
-- name: Install Grafana Agent
+- name: Install Grafana Alloy
   hosts: "{{ hostvar | default([]) }}"
   gather_facts: false
   become: true
 
   tasks:
 
-    - name: Install grafana agent
+    - name: Install Grafana Alloy service
       when: task == "install"
       ansible.builtin.include_role:
-        name: eingram23.windows.win_grafana_agent
+        name: eingram23.windows.win_grafana_alloy
         tasks_from: install
 
-    - name: Uninstall grafana agent
+    - name: Uninstall Grafana Alloy service
       when: task == "uninstall"
       ansible.builtin.include_role:
-        name: eingram23.windows.win_grafana_agent
+        name: eingram23.windows.win_grafana_alloy
         tasks_from: uninstall

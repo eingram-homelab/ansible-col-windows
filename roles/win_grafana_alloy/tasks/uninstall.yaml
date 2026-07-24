@@ -1,7 +1,7 @@
 ---
 - name: Close firewall port
   community.windows.win_firewall_rule:
-    name: Grafana Agent
+    name: Grafana Alloy Agent
     localport: 12345
     action: allow
     direction: in
@@ -10,19 +10,19 @@
 
 - name: Check for uninstall.exe
   ansible.windows.win_stat:
-    path: C:\Program Files\Grafana Agent\Uninstall.exe
+    path: "{{ install_dir }}/Uninstall.exe"
   register: uninstall
 
 - name: Uninstall grafana agent
   when: uninstall.stat.exists
   ansible.windows.win_package:
-    path: C:\Program Files\Grafana Agent\Uninstall.exe
-    product_id: Grafana Agent
+    path: "{{ install_dir }}/Uninstall.exe"
+    product_id: Grafana Alloy
     arguments: /S
     state: absent
-  notify: Reboot
+  # notify: Reboot
 
-- name: Clean up Grafana Agent folder
+- name: Clean up Grafana Alloy folder
   ansible.windows.win_file:
-    path: C:\Program Files\Grafana Agent
+    path: "{{ install_dir }}"
     state: absent

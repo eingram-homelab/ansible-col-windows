@@ -1,6 +1,6 @@
 ---
 - name: Install/Uninstall action1 client
-  hosts: "{{ hostvar }}"
+  hosts: "{{ hostvar | default('')}}"
   gather_facts: false
   become: true
   become_method: runas
@@ -19,7 +19,7 @@
       ansible.windows.win_get_url:
         url: https://app.action1.com/agent/08d8a8f4-954a-11ef-b313-771e547b3e84/Windows/agent(My_Organization).msi
         dest: "{{ root_dest }}{{ package }}.msi"
-    
+
     - name: Run msi install role for {{ package }}
       when: task == "install"
       ansible.builtin.include_role:
@@ -31,7 +31,7 @@
       ansible.builtin.include_role:
         name: eingram23.windows.msi
         tasks_from: uninstall
-    
+
     - name: Clean up installer
       ansible.windows.win_file:
         path: "{{ root_dest }}{{ package }}.msi"

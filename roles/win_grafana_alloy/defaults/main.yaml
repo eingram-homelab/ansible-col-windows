@@ -1,0 +1,12 @@
+---
+env: dev
+common_collectors:
+  - time
+  - memory
+  - pagefile
+  - process
+  - scheduled_task
+  - tcp
+  - update
+  - vmware
+install_dir: D:\Program Files\GrafanaLabs\Alloy
