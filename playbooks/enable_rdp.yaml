@@ -1,0 +1,11 @@
+---
+- name: Enable RDP
+  hosts: "{{ hostvar | default([]) }}"
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Enable Remote Desktop
+      ansible.builtin.include_role:
+        name: eingram23.windows.common
+        tasks_from: enable_rdp

@@ -1,0 +1,56 @@
+---
+- name: Install Hyper-V role
+  ansible.windows.win_feature:
+    name: Hyper-V
+    state: present
+    include_management_tools: true
+  register: hyperv_install_result
+
+- name: Reboot if Hyper-V role was installed
+  ansible.windows.win_reboot:
+    msg: "Rebooting to complete Hyper-V installation"
+    pre_reboot_delay: 10
+    reboot_timeout: 600
+  when: hyperv_install_result.reboot_required
+
+- name: Set all disks to SSD
+  ansible.windows.win_shell: |
+    Get-PhysicalDisk | Set-PhysicalDisk -MediaType SSD
+  register: set_ssd_result
+
+- name: Create temp folder on host
+  ansible.windows.win_file:
+    path: C:\Temp
+    state: directory
+
+- name: Copy SetupNetAdapters script to host
+  ansible.windows.win_copy:
+    src: SetupNetAdapters.ps1
+    dest: C:\Temp\SetupNetAdapters.ps1
+
+- name: Execute SetupNetAdapters script on host
+  ansible.windows.win_shell: C:\Temp\SetupNetAdapters.ps1
+  register: setup_netadapters_result
+
+- name: Debug errors of SetupNetAdapters script execution
+  ansible.builtin.debug:
+    var: setup_netadapters_result.stderr_lines
+
+- name: Set LM and S2D IP addresses for host {{ inventory_hostname }}
+  ansible.builtin.set_fact:
+    lm_ip: "172.36.0.{{ hostvars[inventory_hostname].ansible_interfaces[0].ipv4.address.split('.')[-1] }}"
+    s2d_ip: "172.36.1.{{ hostvars[inventory_hostname].ansible_interfaces[0].ipv4.address.split('.')[-1] }}"
+
+- name: Create IPConfig script on host
+  ansible.windows.win_template:
+    src: SetupIPConfig.ps1.j2
+    dest: C:\Temp\SetupIPConfig.ps1
+
+- name: Execute IPConfig script on host
+  ansible.windows.win_shell: C:\Temp\SetupIPConfig.ps1
+  register: setup_ipconfig_result
+
+- name: Debug errors of SetupIPConfig script execution
+  ansible.builtin.debug:
+    var: setup_ipconfig_result.stderr_lines
+

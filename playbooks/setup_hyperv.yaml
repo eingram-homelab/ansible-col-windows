@@ -1,0 +1,25 @@
+---
+- name: Setup New Hyper-V hosts
+  hosts: "{{ hostvar | default([]) }}"
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Bootstrap Hyper-V hosts
+      ansible.builtin.include_role:
+        name: eingram23.windows.hyperv
+        tasks_from: bootstrap
+
+    - name: Install Failover Clustering feature on Hyper-V hosts
+      ansible.builtin.include_role:
+        name: eingram23.windows.failover_cluster
+
+    # - name: Run cluster tests to prepare for creation of cluster
+    #   ansible.windows.win_shell: |
+    #     Test-Cluster -Node {{ hostvar }} -Include "Storage Spaces Direct","Inventory","Network","System Configuration"
+    #   register: test_cluster_result
+    #   run_once: true
+
+    # - name: Debug output of Test-Cluster command
+    #   ansible.builtin.debug:
+    #     var: test_cluster_result.stdout_lines

@@ -1,0 +1,14 @@
+---
+- name: Install Windows Failover Clustering feature
+  ansible.windows.win_feature:
+    name: Failover-Clustering
+    include_management_tools: true
+    state: present
+  register: failover_cluster_install_result
+
+- name: Reboot if Failover Clustering feature was installed
+  ansible.windows.win_reboot:
+    msg: "Rebooting to complete Failover Clustering installation"
+    pre_reboot_delay: 10
+    reboot_timeout: 600
+  when: failover_cluster_install_result.reboot_required

@@ -1,0 +1,30 @@
+---
+- name: Install Root Certificate
+  hosts: "{{ hostvar|default([]) }}"
+  gather_facts: no
+  become: true
+
+  tasks:
+    - name: Ensure temp folder exists
+      ansible.windows.win_file:
+        path: 'C:\Temp'
+        state: directory
+    
+    - name: Copy Root Certificate to Target
+      ansible.windows.win_copy:
+        content: "{{ lookup('hashi_vault', 'secret=secret/cert/YCD:root.ca') }}"
+        dest: 'C:\Temp\root_ca.cer'
+        force: true
+
+    - name: Install Root Certificate
+      ansible.windows.win_certificate_store:
+        path: 'C:\Temp\root_ca.cer'
+        file_type: pem
+        store_location: LocalMachine
+        store_name: Root
+        state: present
+
+    - name: Remove Root Certificate from Temp
+      ansible.windows.win_file:
+        path: 'C:\Temp\root_ca.cer'
+        state: absent

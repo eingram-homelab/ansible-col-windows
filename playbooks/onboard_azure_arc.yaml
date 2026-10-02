@@ -1,0 +1,113 @@
+---
+- name: "Onboard Windows Servers to Azure Arc-enabled servers with Public endpoint connectivity"
+  hosts: "{{ hostvar | default([]) }}"
+  become: yes
+  become_method: runas
+  gather_facts: yes
+  vars:
+    azure:
+      service_principal_id: "{{ lookup('hashi_vault', 'secret=secret/azure/sp/arc_onboard:id') }}"
+      service_principal_secret: "{{ lookup('hashi_vault', 'secret=secret/azure/sp/arc_onboard:secret') }}"
+      subscription_id: "1cf2d48b-2305-4f3e-a86d-5623c61e4301"
+      resource_group: "ycdisp-rg"
+      tenant_id: "7b28dd54-461b-4bcc-9c36-afe8b891f8eb"
+      location: "westus"
+      cloud: "AzureCloud"
+      auth_type: "principal"
+      correlation_id: "1ab43311-e9c4-4e60-8882-e173eac8a3b2"
+
+    agent_download_url: "https://gbl.his.arc.azure.com/azcmagent-windows"
+    temp_installer_path: '{{ ansible_env.SystemRoot }}\Temp\install_windows_azcmagent.ps1'
+    azcmagent_path: '{{ ansible_env.ProgramW6432 }}\AzureConnectedMachineAgent\azcmagent.exe'
+    log_endpoint: "https://gbl.his.arc.azure.com/log"
+
+  pre_tasks:
+    - name: Ensure target is Windows
+      fail:
+        msg: "This playbook targets Windows hosts only."
+      when: ansible_facts['os_family'] is not defined or ansible_facts['os_family'] != 'Windows'
+
+    - name: Set TLS security protocol
+      win_shell: |
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
+      changed_when: false
+
+  tasks:
+    - name: Azure Arc Agent Installation and Onboarding
+      block:
+        - name: Download the installation script
+          win_get_url:
+            url: "{{ agent_download_url }}"
+            dest: "{{ temp_installer_path }}"
+            url_timeout: 30
+            force: true
+          register: download_result
+
+        - name: Run installer script
+          win_shell: |
+            & "{{ temp_installer_path }}"
+            exit $LASTEXITCODE
+          register: install_result
+          failed_when: install_result.rc != 0
+
+        - name: Wait for installation to complete
+          pause:
+            seconds: 5
+
+        - name: Run azcmagent connect
+          win_shell: |
+            & "{{ azcmagent_path }}" connect `
+              --service-principal-id "{{ azure.service_principal_id }}" `
+              --service-principal-secret "{{ azure.service_principal_secret }}" `
+              --resource-group "{{ azure.resource_group }}" `
+              --tenant-id "{{ azure.tenant_id }}" `
+              --location "{{ azure.location }}" `
+              --subscription-id "{{ azure.subscription_id }}" `
+              --cloud "{{ azure.cloud }}" `
+              --correlation-id "{{ azure.correlation_id }}" `
+              --tags "City=La Palma,StateOrDistrict=California,ArcSQLServerExtensionDeployment=Disabled" `
+              --gateway-id "/subscriptions/1cf2d48b-2305-4f3e-a86d-5623c61e4301/resourceGroups/ycdisp-rg/providers/Microsoft.HybridCompute/gateways/ycdisp-arc-gw" `
+              --enable-automatic-upgrade
+            exit $LASTEXITCODE
+          register: connect_result
+          failed_when: connect_result.rc != 0
+
+        - name: Report success
+          debug:
+            msg: "Azure Arc onboarding completed successfully on {{ inventory_hostname }}"
+          when: connect_result is defined and ('rc' in connect_result) and connect_result.rc == 0
+
+      rescue:
+        - name: Set failure message
+          set_fact:
+            failure_message: >-
+              {{
+                (ansible_failed_result.stderr | default(''))
+                or (ansible_failed_result.stdout | default(''))
+                or (ansible_failed_result.msg | default('No output'))
+              }}
+            log_max_bytes: 1400
+
+        - name: Log failure to endpoint
+          win_uri:
+            url: "{{ log_endpoint }}"
+            method: PUT
+            content_type: "application/json"
+            body: >-
+              {{ {
+                  "subscriptionId": azure.subscription_id,
+                  "resourceGroup": azure.resource_group,
+                  "tenantId": azure.tenant_id,
+                  "location": azure.location,
+                  "correlationId": azure.correlation_id,
+                  "authType": azure.auth_type,
+                  "operation": "onboarding",
+                  "messageType": "connectFailed",
+                  "message": (failure_message | truncate(log_max_bytes, True, '...'))
+                } | to_json }}
+            status_code: [200, 201, 202]
+          ignore_errors: yes
+
+        - name: Fail the playbook
+          fail:
+            msg: "Azure Arc onboarding failed on {{ inventory_hostname }}"

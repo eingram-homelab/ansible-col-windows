@@ -1,0 +1,10 @@
+If (!(Get-NetIPAddress -InterfaceAlias "LM" -IPAddress "{{ lm_ip }}")) {
+  New-NetIPAddress -InterfaceAlias "LM" -IPAddress {{ lm_ip }} -PrefixLength 24
+}
+If (!(Get-NetIPAddress -InterfaceAlias "S2D" -IPAddress "{{ s2d_ip }}")) {
+  New-NetIPAddress -InterfaceAlias "S2D" -IPAddress {{ s2d_ip }} -PrefixLength 24
+}
+
+# Keep storage traffic off DNS/AD — no gateway, no registration
+Set-DnsClient -InterfaceAlias "LM" -RegisterThisConnectionsAddress $false
+Set-DnsClient -InterfaceAlias "S2D" -RegisterThisConnectionsAddress $false
